@@ -12,17 +12,39 @@ import { buildFairMintInstructions, rentExemptBytes } from "./buildMint.js";
 import { verifyMint, DEVNET_RPC } from "./verify.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const walletPath = join(root, "keys", "devnet-wallet.json");
-const deploymentPath = join(root, "deployments", "devnet.json");
 
-function loadOrCreateWallet(): Keypair {
-  if (existsSync(walletPath)) {
-    const secret = Uint8Array.from(JSON.parse(readFileSync(walletPath, "utf8")) as number[]);
+const NETWORKS = {
+  devnet: {
+    rpc: DEVNET_RPC,
+    wallet: "keys/devnet-wallet.json",
+    deployment: "deployments/devnet.json",
+  },
+  local: {
+    rpc: "http://127.0.0.1:8899",
+    wallet: "keys/local-wallet.json",
+    deployment: "deployments/local.json",
+  },
+} as const;
+
+type NetworkName = keyof typeof NETWORKS;
+
+function parseNetwork(): NetworkName {
+  const flag = process.argv.indexOf("--network");
+  const name = flag === -1 ? "devnet" : process.argv[flag + 1];
+  if (name !== "devnet" && name !== "local") {
+    throw new Error("Use devnet or local. The real Solana network is off because it spends money.");
+  }
+  return name;
+}
+
+function loadOrCreateWallet(path: string): Keypair {
+  if (existsSync(path)) {
+    const secret = Uint8Array.from(JSON.parse(readFileSync(path, "utf8")) as number[]);
     return Keypair.fromSecretKey(secret);
   }
   const wallet = Keypair.generate();
-  mkdirSync(dirname(walletPath), { recursive: true });
-  writeFileSync(walletPath, JSON.stringify(Array.from(wallet.secretKey)));
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(Array.from(wallet.secretKey)));
   return wallet;
 }
 
@@ -52,24 +74,20 @@ async function ensureDevnetSol(connection: Connection, wallet: Keypair): Promise
 }
 
 async function main(): Promise<void> {
-  const network = process.argv.includes("--network")
-    ? process.argv[process.argv.indexOf("--network") + 1]
-    : "devnet";
+  const network = parseNetwork();
+  const paths = NETWORKS[network];
+  const walletPath = join(root, paths.wallet);
+  const deploymentPath = join(root, paths.deployment);
 
-  if (network !== "devnet") {
-    throw new Error(
-      "Only the free test network is turned on. Real Solana spends money and is not part of this command.",
-    );
-  }
   if (existsSync(deploymentPath) && !process.argv.includes("--again")) {
     const saved = JSON.parse(readFileSync(deploymentPath, "utf8")) as { mint?: string };
     throw new Error(
-      `Already created: ${saved.mint ?? "(see deployments/devnet.json)"}. Run with --again only if you want a second test coin.`,
+      `Already created: ${saved.mint ?? deploymentPath}. Run with --again only if you want a second test coin.`,
     );
   }
 
-  const connection = new Connection(process.env.SOLANA_RPC_URL ?? DEVNET_RPC, "confirmed");
-  const wallet = loadOrCreateWallet();
+  const connection = new Connection(process.env.SOLANA_RPC_URL ?? paths.rpc, "confirmed");
+  const wallet = loadOrCreateWallet(walletPath);
   await ensureDevnetSol(connection, wallet);
 
   const mint = Keypair.generate();
@@ -95,7 +113,7 @@ async function main(): Promise<void> {
     deploymentPath,
     JSON.stringify(
       {
-        network: "devnet",
+        network,
         mint: mint.publicKey.toBase58(),
         name: TOKEN.name,
         symbol: TOKEN.symbol,
@@ -113,7 +131,7 @@ async function main(): Promise<void> {
     ) + "\n",
   );
 
-  console.log(`Pinch is on the test network.`);
+  console.log(network === "local" ? "Pinch is on your local test chain." : "Pinch is on the free Solana test network.");
   console.log(`Coin address: ${mint.publicKey.toBase58()}`);
   console.log(`Your test wallet: ${wallet.publicKey.toBase58()}`);
   console.log(`All ${TOKEN.supply.toLocaleString("en-US")} coins are in that wallet.`);

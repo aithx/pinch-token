@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Connection, PublicKey } from "@solana/web3.js";
 import {
   getExtensionTypes,
@@ -55,19 +57,32 @@ export async function verifyMint(
   return assessFairMint(snapshot);
 }
 
-function mintFromArgs(argv: string[]): string {
-  const inline = argv.find((arg) => !arg.startsWith("-"));
+function networkFromArgs(argv: string[]): "devnet" | "local" {
+  const flag = argv.indexOf("--network");
+  const name = flag === -1 ? "devnet" : argv[flag + 1];
+  if (name !== "devnet" && name !== "local") {
+    throw new Error("Use --network devnet or --network local.");
+  }
+  return name;
+}
+
+function mintFromArgs(argv: string[], network: "devnet" | "local"): string {
+  const skip = new Set<string>();
+  const flag = argv.indexOf("--network");
+  if (flag !== -1) skip.add(String(flag + 1));
+  const inline = argv.find((arg, index) => !arg.startsWith("-") && !skip.has(String(index)));
   if (inline) return inline;
-  const saved = JSON.parse(readFileSync(new URL("../deployments/devnet.json", import.meta.url), "utf8")) as {
-    mint?: string;
-  };
-  if (!saved.mint) throw new Error("deployments/devnet.json has no mint.");
+  const file = join(dirname(fileURLToPath(import.meta.url)), "..", "deployments", `${network}.json`);
+  const saved = JSON.parse(readFileSync(file, "utf8")) as { mint?: string };
+  if (!saved.mint) throw new Error(`${file} has no mint.`);
   return saved.mint;
 }
 
 async function main(): Promise<void> {
-  const rpc = process.env.SOLANA_RPC_URL ?? DEVNET_RPC;
-  const mint = new PublicKey(mintFromArgs(process.argv.slice(2)));
+  const argv = process.argv.slice(2);
+  const network = networkFromArgs(argv);
+  const rpc = process.env.SOLANA_RPC_URL ?? (network === "local" ? "http://127.0.0.1:8899" : DEVNET_RPC);
+  const mint = new PublicKey(mintFromArgs(argv, network));
   const problems = await verifyMint(new Connection(rpc, "confirmed"), mint);
   if (problems.length > 0) {
     console.error(`${mint.toBase58()} is not a fair Pinch coin:`);

@@ -19,7 +19,7 @@ npm test
 npm run create
 ```
 
-That asks Solana's test network for play money. It does not spend real SOL.
+That asks Solana's test network for play money. It does not spend real SOL. The public faucet sometimes says "too many requests". Wait and run `npm run create` again. Nothing real was spent.
 
 You get a coin address. All 1,000,000,000 Pinch coins sit in a test wallet on this Mac:
 
