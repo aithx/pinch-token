@@ -1,0 +1,27 @@
+{
+  "name": "pinch-token",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinch, a fair Solana meme coin. Fixed supply, no freeze, no tax.",
+  "type": "module",
+  "scripts": {
+    "logo": "node scripts/draw-logo.mjs",
+    "test": "tsx --test tests/fair.test.ts",
+    "create": "tsx src/deploy.ts",
+    "verify": "tsx src/verify.ts"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@solana/spl-token": "^0.4.15",
+    "@solana/spl-token-metadata": "^0.1.6",
+    "@solana/web3.js": "^1.99.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
